@@ -40,6 +40,9 @@ class JSONCollapser {
         white-space: nowrap !important;
         vertical-align: middle !important;
       }
+      .database-leaf-value.expanded {
+        max-width: 200px !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -87,16 +90,36 @@ class JSONCollapser {
       }
     });
 
-    // Insert button as last child of key-value container
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'json-collapser-copy';
+    expandBtn.setAttribute('data-json-collapser', 'node-expand');
+    expandBtn.textContent = '▶';
+    expandBtn.title = 'Expand field width';
+    expandBtn.style.display = 'none'; // Hidden by default
+    expandBtn.style.fontSize = '12px';
+
+    expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const leafValue = node.querySelector('.database-leaf-value');
+      if (leafValue) {
+        leafValue.classList.toggle('expanded');
+        expandBtn.textContent = leafValue.classList.contains('expanded') ? '◀' : '▶';
+      }
+    });
+
+    // Insert buttons as last children of key-value container
+    keyValueContainer.appendChild(expandBtn);
     keyValueContainer.appendChild(btn);
 
-    // Show/hide button on hover
+    // Show/hide buttons on hover
     keyValueContainer.addEventListener('mouseenter', () => {
       btn.style.display = 'inline-block';
+      expandBtn.style.display = 'inline-block';
     });
 
     keyValueContainer.addEventListener('mouseleave', () => {
       btn.style.display = 'none';
+      expandBtn.style.display = 'none';
     });
   }
 
@@ -140,6 +163,10 @@ class JSONCollapser {
   buildJSONFromNode(node) {
     const result = this.extractNodeValue(node);
     if (!result) return null;
+    // Return string values as-is without quotes, otherwise return JSON
+    if (typeof result.value === 'string') {
+      return result.value;
+    }
     return JSON.stringify(result.value, null, 2);
   }
 
