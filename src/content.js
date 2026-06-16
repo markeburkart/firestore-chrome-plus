@@ -1,5 +1,6 @@
 // Firebase JSON Collapser - Content Script
 // Targets large JSON text blocks in the document details panel
+// Supports both Firebase Console and Firestore Emulator
 
 const MIN_TEXT_LENGTH = 150; // Collapse blocks larger than this
 const OBSERVER_OPTIONS = { childList: true, subtree: true };
@@ -7,7 +8,18 @@ const OBSERVER_OPTIONS = { childList: true, subtree: true };
 class JSONCollapser {
   constructor() {
     this.processedElements = new WeakSet();
+    this.environment = this.detectEnvironment();
     this.init();
+  }
+
+  detectEnvironment() {
+    // Check if we're on the Firestore emulator
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      if (window.location.pathname.includes('firestore')) {
+        return 'emulator';
+      }
+    }
+    return 'firebase-console';
   }
 
   init() {
@@ -43,27 +55,70 @@ class JSONCollapser {
       .database-leaf-value.expanded {
         max-width: 200px !important;
       }
+      .FieldPreview-summary {
+        max-width: 100px !important;
+        display: inline-block !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        vertical-align: middle !important;
+      }
+      .FieldPreview-summary.expanded {
+        max-width: 200px !important;
+      }
     `;
     document.head.appendChild(style);
   }
 
   processJSONBlocks() {
-    // Process database-node elements
+    if (this.environment === 'emulator') {
+      this.processEmulatorFields();
+    } else {
+      this.processFirebaseConsoleFields();
+    }
+  }
+
+  processFirebaseConsoleFields() {
     const dbNodes = document.querySelectorAll('.database-node');
     let isFirst = true;
 
     dbNodes.forEach(node => {
-      // Add copy button for this node
       this.addCopyButtonToNode(node);
-
-      // Add copy-all button to first node
       if (isFirst) {
         this.addCopyAllButton(node);
         isFirst = false;
       }
     });
+  }
 
-    // Legacy text block processing disabled - database-nodes are handled above
+  processEmulatorFields() {
+    const fieldPreviews = document.querySelectorAll('.FieldPreview');
+    let isFirst = true;
+
+    fieldPreviews.forEach(field => {
+      const key = field.querySelector('.FieldPreview-key');
+      if (key && !this.processedElements.has(field)) {
+        this.addCopyButtonToEmulatorField(field);
+        if (isFirst && this.isTopLevelField(field)) {
+          this.addCopyAllButtonToEmulator(field);
+          isFirst = false;
+        }
+      }
+    });
+  }
+
+  isTopLevelField(field) {
+    let current = field.parentElement;
+    while (current && current !== document.body) {
+      if (current.classList.contains('FieldPreview-children')) {
+        current = current.parentElement.parentElement;
+      }
+      if (current && current.classList.contains('FieldPreview')) {
+        return false;
+      }
+      current = current.parentElement;
+    }
+    return true;
   }
 
   addCopyButtonToNode(node) {
@@ -171,7 +226,19 @@ class JSONCollapser {
   }
 
   buildFullDocumentJSON() {
-    const topLevelNodes = document.querySelectorAll('.database-node:not(.is-within-array)');
+    const allNodes = document.querySelectorAll('.database-node:not(.is-within-array)');
+    const topLevelNodes = Array.from(allNodes).filter(node => {
+      // Check if this node has a .database-node ancestor (meaning it's nested)
+      let current = node.parentElement;
+      while (current && current !== document.body) {
+        if (current.classList.contains('database-node')) {
+          return false; // Has a .database-node ancestor, so it's not top-level
+        }
+        current = current.parentElement;
+      }
+      return true; // No .database-node ancestor, so it's top-level
+    });
+
     const obj = {};
 
     topLevelNodes.forEach(node => {
@@ -185,7 +252,19 @@ class JSONCollapser {
   }
 
   async constructDocumentJSON() {
-    const topLevelNodes = document.querySelectorAll('.database-node:not(.is-within-array)');
+    const allNodes = document.querySelectorAll('.database-node:not(.is-within-array)');
+    const topLevelNodes = Array.from(allNodes).filter(node => {
+      // Check if this node has a .database-node ancestor (meaning it's nested)
+      let current = node.parentElement;
+      while (current && current !== document.body) {
+        if (current.classList.contains('database-node')) {
+          return false; // Has a .database-node ancestor, so it's not top-level
+        }
+        current = current.parentElement;
+      }
+      return true; // No .database-node ancestor, so it's top-level
+    });
+
     const obj = {};
 
     for (const node of topLevelNodes) {
@@ -378,6 +457,182 @@ class JSONCollapser {
         btn.textContent = originalText;
       }, 2000);
     });
+  }
+
+  addCopyButtonToEmulatorField(field) {
+    if (field.querySelector('[data-json-collapser="node-copy"]')) {
+      return;
+    }
+
+    this.processedElements.add(field);
+    const keyElement = field.querySelector('.FieldPreview-key');
+    if (!keyElement) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'json-collapser-copy';
+    btn.setAttribute('data-json-collapser', 'node-copy');
+    btn.textContent = '📋 Copy';
+    btn.title = 'Copy value to clipboard';
+    btn.style.display = 'none';
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const json = this.buildJSONFromEmulatorField(field);
+      if (json) {
+        this.copyToClipboard(json, btn);
+      }
+    });
+
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'json-collapser-copy';
+    expandBtn.setAttribute('data-json-collapser', 'node-expand');
+    expandBtn.textContent = '▶';
+    expandBtn.title = 'Expand field width';
+    expandBtn.style.display = 'none';
+    expandBtn.style.fontSize = '12px';
+
+    expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const summary = field.querySelector('.FieldPreview-summary');
+      if (summary) {
+        summary.classList.toggle('expanded');
+        expandBtn.textContent = summary.classList.contains('expanded') ? '◀' : '▶';
+      }
+    });
+
+    keyElement.parentElement.appendChild(expandBtn);
+    keyElement.parentElement.appendChild(btn);
+
+    keyElement.parentElement.addEventListener('mouseenter', () => {
+      btn.style.display = 'inline-block';
+      expandBtn.style.display = 'inline-block';
+    });
+
+    keyElement.parentElement.addEventListener('mouseleave', () => {
+      btn.style.display = 'none';
+      expandBtn.style.display = 'none';
+    });
+  }
+
+  addCopyAllButtonToEmulator(field) {
+    if (field.querySelector('[data-json-collapser="copy-all"]')) {
+      return;
+    }
+
+    const keyElement = field.querySelector('.FieldPreview-key');
+    if (!keyElement) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'json-collapser-copy';
+    btn.setAttribute('data-json-collapser', 'copy-all');
+    btn.textContent = '📋 Copy All';
+    btn.title = 'Copy entire document as JSON';
+    btn.style.display = 'none';
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const json = this.buildFullDocumentJSONFromEmulator();
+      if (json) {
+        this.copyToClipboard(json, btn);
+      }
+    });
+
+    keyElement.parentElement.appendChild(btn);
+
+    keyElement.parentElement.addEventListener('mouseenter', () => {
+      btn.style.display = 'inline-block';
+    });
+
+    keyElement.parentElement.addEventListener('mouseleave', () => {
+      btn.style.display = 'none';
+    });
+  }
+
+  buildJSONFromEmulatorField(field) {
+    const result = this.extractEmulatorFieldValue(field);
+    if (!result) return null;
+    if (typeof result.value === 'string') {
+      return result.value;
+    }
+    return JSON.stringify(result.value, null, 2);
+  }
+
+  buildFullDocumentJSONFromEmulator() {
+    const fieldList = document.querySelector('.Firestore-Field-List');
+    if (!fieldList) return null;
+
+    const topLevelFields = Array.from(fieldList.querySelectorAll(':scope > .FieldPreview'));
+    const obj = {};
+
+    topLevelFields.forEach(field => {
+      const result = this.extractEmulatorFieldValue(field);
+      if (result && result.key) {
+        obj[result.key] = result.value;
+      }
+    });
+
+    return Object.keys(obj).length > 0 ? JSON.stringify(obj, null, 2) : null;
+  }
+
+  extractEmulatorFieldValue(field) {
+    const keyElement = field.querySelector('.FieldPreview-key');
+    if (!keyElement) return null;
+
+    const key = keyElement.textContent.trim();
+    const typeElement = field.querySelector('.FieldPreview-type');
+    const type = typeElement ? typeElement.textContent.trim() : '';
+    const childrenContainer = field.querySelector('.FieldPreview-children');
+
+    if (childrenContainer) {
+      const isArray = type.includes('array');
+      let value;
+
+      if (isArray) {
+        value = [];
+        const childFields = childrenContainer.querySelectorAll(':scope > .FieldPreview');
+        childFields.forEach(childField => {
+          const childResult = this.extractEmulatorFieldValue(childField);
+          if (childResult) {
+            value.push(childResult.value);
+          }
+        });
+      } else {
+        value = {};
+        const childFields = childrenContainer.querySelectorAll(':scope > .FieldPreview');
+        childFields.forEach(childField => {
+          const childResult = this.extractEmulatorFieldValue(childField);
+          if (childResult && childResult.key) {
+            value[childResult.key] = childResult.value;
+          }
+        });
+      }
+
+      return { key, value };
+    }
+
+    const summaryElement = field.querySelector('.FieldPreview-summary');
+    if (!summaryElement) return { key, value: null };
+
+    let valueText = summaryElement.textContent.trim();
+
+    // Handle special types
+    if (type.includes('boolean')) {
+      return { key, value: valueText === 'true' };
+    }
+    if (type.includes('number')) {
+      const num = parseFloat(valueText);
+      return { key, value: isNaN(num) ? valueText : num };
+    }
+    if (type.includes('timestamp')) {
+      return { key, value: valueText };
+    }
+
+    // Handle quoted strings and other values
+    try {
+      return { key, value: JSON.parse(valueText) };
+    } catch {
+      return { key, value: valueText };
+    }
   }
 
   addDocumentCopyButton() {
