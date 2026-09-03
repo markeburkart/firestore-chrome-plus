@@ -5,6 +5,18 @@
 const MIN_TEXT_LENGTH = 150; // Collapse blocks larger than this
 const OBSERVER_OPTIONS = { childList: true, subtree: true };
 
+const ICON_COPY =
+  '<svg class="json-collapser-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<rect x="9" y="9" width="12" height="12" rx="2"/>' +
+  '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+const ICON_EXPAND =
+  '<svg class="json-collapser-icon json-collapser-icon--expand" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>' +
+  '<line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+
 class JSONCollapser {
   constructor() {
     this.processedElements = new WeakSet();
@@ -66,8 +78,330 @@ class JSONCollapser {
       .FieldPreview-summary.expanded {
         max-width: 200px !important;
       }
+      .json-collapser-copy {
+        align-items: center !important;
+        gap: 4px !important;
+        color: #e8eaed !important;
+        opacity: 0.9;
+        transition: opacity 0.15s ease, color 0.15s ease !important;
+      }
+      .json-collapser-copy:hover {
+        color: #ffffff !important;
+        opacity: 1;
+      }
+      .json-collapser-icon {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+      }
+      [data-json-collapser="node-expand"] {
+        padding: 2px 4px !important;
+        color: #bdc1c6 !important;
+      }
+      [data-json-collapser="node-expand"]:hover {
+        color: #8ab4f8 !important;
+      }
+      .json-collapser-icon--expand {
+        width: 17px;
+        height: 17px;
+      }
+      .json-collapser-popover {
+        position: fixed;
+        z-index: 2147483647;
+        max-width: 480px;
+        min-width: 220px;
+        background: #202124;
+        color: #e8eaed;
+        border: 1px solid #5f6368;
+        border-radius: 6px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        font-family: Menlo, Monaco, monospace;
+        font-size: 12px;
+        display: none;
+      }
+      .json-collapser-popover.visible {
+        display: block;
+      }
+      .json-collapser-popover-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 4px 8px;
+        border-bottom: 1px solid #5f6368;
+      }
+      .json-collapser-popover-header span {
+        color: #9aa0a6;
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .json-collapser-popover-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #3c4043;
+        color: #e8eaed;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 9px;
+        font-size: 11px;
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .json-collapser-popover-btn .json-collapser-icon {
+        width: 13px;
+        height: 13px;
+      }
+      .json-collapser-popover-btn:hover {
+        background: #5f6368;
+      }
+      .json-collapser-popover-body {
+        margin: 0;
+        padding: 8px;
+        max-height: 320px;
+        max-width: 480px;
+        overflow: auto;
+        white-space: pre;
+        tab-size: 2;
+      }
+      .json-collapser-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .json-collapser-modal {
+        background: #202124;
+        color: #e8eaed;
+        border: 1px solid #5f6368;
+        border-radius: 8px;
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+        width: min(80vw, 900px);
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        font-family: Menlo, Monaco, monospace;
+      }
+      .json-collapser-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid #5f6368;
+      }
+      .json-collapser-modal-header strong {
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .json-collapser-modal-body {
+        margin: 0;
+        padding: 14px;
+        overflow: auto;
+        white-space: pre;
+        font-size: 13px;
+        tab-size: 2;
+        flex: 1;
+      }
     `;
     document.head.appendChild(style);
+  }
+
+  getPopover() {
+    if (this._popover) return this._popover;
+
+    const pop = document.createElement('div');
+    pop.className = 'json-collapser-popover';
+
+    const header = document.createElement('div');
+    header.className = 'json-collapser-popover-header';
+
+    const label = document.createElement('span');
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'json-collapser-popover-btn';
+    copyBtn.innerHTML = ICON_COPY + ' Copy';
+
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'json-collapser-popover-btn';
+    expandBtn.innerHTML = ICON_EXPAND + ' Expand';
+
+    header.appendChild(label);
+    const btnWrap = document.createElement('div');
+    btnWrap.style.display = 'flex';
+    btnWrap.style.gap = '6px';
+    btnWrap.appendChild(copyBtn);
+    btnWrap.appendChild(expandBtn);
+    header.appendChild(btnWrap);
+
+    const body = document.createElement('pre');
+    body.className = 'json-collapser-popover-body';
+
+    pop.appendChild(header);
+    pop.appendChild(body);
+    document.body.appendChild(pop);
+
+    // Keep popover open while the pointer is inside it.
+    pop.addEventListener('mouseenter', () => {
+      clearTimeout(this._popoverHideTimer);
+    });
+    pop.addEventListener('mouseleave', () => {
+      this.schedulePopoverHide();
+    });
+
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.copyToClipboard(body.textContent, copyBtn);
+    });
+    expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.openModal(label.textContent, body.textContent);
+      this.hidePopover();
+    });
+
+    this._popover = pop;
+    this._popoverLabel = label;
+    this._popoverBody = body;
+    return pop;
+  }
+
+  schedulePopoverHide() {
+    clearTimeout(this._popoverHideTimer);
+    this._popoverHideTimer = setTimeout(() => this.hidePopover(), 250);
+  }
+
+  hidePopover() {
+    if (this._popover) this._popover.classList.remove('visible');
+  }
+
+  formatForDisplay(text) {
+    if (typeof text !== 'string') return text;
+    const trimmed = text.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        return JSON.stringify(JSON.parse(trimmed), null, 2);
+      } catch {
+        return text;
+      }
+    }
+    return text;
+  }
+
+  showPopoverFor(anchorEl, key, getFullValue) {
+    let value = getFullValue();
+    if (value == null || value === '') return;
+    value = this.formatForDisplay(value);
+
+    this.getPopover();
+    clearTimeout(this._popoverHideTimer);
+
+    this._popoverLabel.textContent = key || 'value';
+    this._popoverBody.textContent = value;
+
+    const pop = this._popover;
+    pop.classList.add('visible');
+
+    // Position below the anchor, flipping / clamping to stay on screen.
+    const rect = anchorEl.getBoundingClientRect();
+    const popRect = pop.getBoundingClientRect();
+    let top = rect.bottom + 6;
+    if (top + popRect.height > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - popRect.height - 6);
+    }
+    let left = rect.left;
+    if (left + popRect.width > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - popRect.width - 8);
+    }
+    pop.style.top = `${top}px`;
+    pop.style.left = `${left}px`;
+  }
+
+  attachValuePopover(anchorEl, getKey, getFullValue) {
+    if (!anchorEl || anchorEl.dataset.jsonCollapserPopover) return;
+    anchorEl.dataset.jsonCollapserPopover = '1';
+    anchorEl.style.cursor = 'help';
+
+    anchorEl.addEventListener('mouseenter', () => {
+      this.showPopoverFor(anchorEl, getKey(), getFullValue);
+    });
+    anchorEl.addEventListener('mouseleave', () => {
+      this.schedulePopoverHide();
+    });
+  }
+
+  openModal(key, text) {
+    this.closeModal();
+    text = this.formatForDisplay(text);
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'json-collapser-modal-backdrop';
+
+    const modal = document.createElement('div');
+    modal.className = 'json-collapser-modal';
+
+    const header = document.createElement('div');
+    header.className = 'json-collapser-modal-header';
+
+    const title = document.createElement('strong');
+    title.textContent = key || 'value';
+
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'json-collapser-popover-btn';
+    copyBtn.innerHTML = ICON_COPY + ' Copy';
+    copyBtn.addEventListener('click', () => this.copyToClipboard(text, copyBtn));
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'json-collapser-popover-btn';
+    closeBtn.textContent = '✕ Close';
+    closeBtn.addEventListener('click', () => this.closeModal());
+
+    actions.appendChild(copyBtn);
+    actions.appendChild(closeBtn);
+    header.appendChild(title);
+    header.appendChild(actions);
+
+    const body = document.createElement('pre');
+    body.className = 'json-collapser-modal-body';
+    body.textContent = text;
+
+    modal.appendChild(header);
+    modal.appendChild(body);
+    backdrop.appendChild(modal);
+
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) this.closeModal();
+    });
+    this._modalKeyHandler = (e) => {
+      if (e.key === 'Escape') this.closeModal();
+    };
+    document.addEventListener('keydown', this._modalKeyHandler);
+
+    document.body.appendChild(backdrop);
+    this._modal = backdrop;
+  }
+
+  closeModal() {
+    if (this._modal) {
+      this._modal.remove();
+      this._modal = null;
+    }
+    if (this._modalKeyHandler) {
+      document.removeEventListener('keydown', this._modalKeyHandler);
+      this._modalKeyHandler = null;
+    }
   }
 
   processJSONBlocks() {
@@ -133,7 +467,7 @@ class JSONCollapser {
     const btn = document.createElement('button');
     btn.className = 'json-collapser-copy';
     btn.setAttribute('data-json-collapser', 'node-copy');
-    btn.textContent = '📋 Copy';
+    btn.innerHTML = ICON_COPY + ' Copy';
     btn.title = 'Copy value to clipboard';
     btn.style.display = 'none'; // Hidden by default
 
@@ -148,19 +482,30 @@ class JSONCollapser {
     const expandBtn = document.createElement('button');
     expandBtn.className = 'json-collapser-copy';
     expandBtn.setAttribute('data-json-collapser', 'node-expand');
-    expandBtn.textContent = '▶';
-    expandBtn.title = 'Expand field width';
+    expandBtn.innerHTML = ICON_EXPAND;
+    expandBtn.title = 'Open full value in a popup';
     expandBtn.style.display = 'none'; // Hidden by default
-    expandBtn.style.fontSize = '12px';
 
     expandBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const leafValue = node.querySelector('.database-leaf-value');
-      if (leafValue) {
-        leafValue.classList.toggle('expanded');
-        expandBtn.textContent = leafValue.classList.contains('expanded') ? '◀' : '▶';
+      const result = this.extractNodeValue(node);
+      const text = this.buildJSONFromNode(node);
+      if (text) {
+        this.hidePopover();
+        this.openModal(result ? result.key : '', text);
       }
     });
+
+    // Hover popover on the collapsed value text itself
+    const leafValue = node.querySelector('.database-leaf-value');
+    this.attachValuePopover(
+      leafValue,
+      () => {
+        const r = this.extractNodeValue(node);
+        return r ? r.key : '';
+      },
+      () => this.buildJSONFromNode(node)
+    );
 
     // Insert buttons as last children of key-value container
     keyValueContainer.appendChild(expandBtn);
@@ -168,8 +513,8 @@ class JSONCollapser {
 
     // Show/hide buttons on hover
     keyValueContainer.addEventListener('mouseenter', () => {
-      btn.style.display = 'inline-block';
-      expandBtn.style.display = 'inline-block';
+      btn.style.display = 'inline-flex';
+      expandBtn.style.display = 'inline-flex';
     });
 
     keyValueContainer.addEventListener('mouseleave', () => {
@@ -190,7 +535,7 @@ class JSONCollapser {
     const btn = document.createElement('button');
     btn.className = 'json-collapser-copy';
     btn.setAttribute('data-json-collapser', 'copy-all');
-    btn.textContent = '📋 Copy All';
+    btn.innerHTML = ICON_COPY + ' Copy All';
     btn.title = 'Copy entire document as JSON';
     btn.style.display = 'none'; // Hidden by default
 
@@ -207,7 +552,7 @@ class JSONCollapser {
 
     // Show/hide button on hover
     keyValueContainer.addEventListener('mouseenter', () => {
-      btn.style.display = 'inline-block';
+      btn.style.display = 'inline-flex';
     });
 
     keyValueContainer.addEventListener('mouseleave', () => {
@@ -432,7 +777,7 @@ class JSONCollapser {
     const btn = document.createElement('button');
     btn.className = 'json-collapser-copy';
     btn.setAttribute('data-json-collapser', 'copy');
-    btn.textContent = '📋 Copy';
+    btn.innerHTML = ICON_COPY + ' Copy';
     btn.title = 'Copy JSON to clipboard';
 
     btn.addEventListener('click', (e) => {
@@ -444,17 +789,17 @@ class JSONCollapser {
   }
 
   copyToClipboard(text, btn) {
-    const originalText = btn.textContent;
+    const original = btn.innerHTML;
 
     navigator.clipboard.writeText(text).then(() => {
       btn.textContent = '✓ Copied!';
       setTimeout(() => {
-        btn.textContent = originalText;
+        btn.innerHTML = original;
       }, 2000);
     }).catch(() => {
       btn.textContent = '✗ Failed';
       setTimeout(() => {
-        btn.textContent = originalText;
+        btn.innerHTML = original;
       }, 2000);
     });
   }
@@ -471,7 +816,7 @@ class JSONCollapser {
     const btn = document.createElement('button');
     btn.className = 'json-collapser-copy';
     btn.setAttribute('data-json-collapser', 'node-copy');
-    btn.textContent = '📋 Copy';
+    btn.innerHTML = ICON_COPY + ' Copy';
     btn.title = 'Copy value to clipboard';
     btn.style.display = 'none';
 
@@ -486,26 +831,37 @@ class JSONCollapser {
     const expandBtn = document.createElement('button');
     expandBtn.className = 'json-collapser-copy';
     expandBtn.setAttribute('data-json-collapser', 'node-expand');
-    expandBtn.textContent = '▶';
-    expandBtn.title = 'Expand field width';
+    expandBtn.innerHTML = ICON_EXPAND;
+    expandBtn.title = 'Open full value in a popup';
     expandBtn.style.display = 'none';
-    expandBtn.style.fontSize = '12px';
 
     expandBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const summary = field.querySelector('.FieldPreview-summary');
-      if (summary) {
-        summary.classList.toggle('expanded');
-        expandBtn.textContent = summary.classList.contains('expanded') ? '◀' : '▶';
+      const result = this.extractEmulatorFieldValue(field);
+      const text = this.buildJSONFromEmulatorField(field);
+      if (text) {
+        this.hidePopover();
+        this.openModal(result ? result.key : '', text);
       }
     });
+
+    // Hover popover on the collapsed value text itself
+    const summary = field.querySelector('.FieldPreview-summary');
+    this.attachValuePopover(
+      summary,
+      () => {
+        const r = this.extractEmulatorFieldValue(field);
+        return r ? r.key : '';
+      },
+      () => this.buildJSONFromEmulatorField(field)
+    );
 
     keyElement.parentElement.appendChild(expandBtn);
     keyElement.parentElement.appendChild(btn);
 
     keyElement.parentElement.addEventListener('mouseenter', () => {
-      btn.style.display = 'inline-block';
-      expandBtn.style.display = 'inline-block';
+      btn.style.display = 'inline-flex';
+      expandBtn.style.display = 'inline-flex';
     });
 
     keyElement.parentElement.addEventListener('mouseleave', () => {
@@ -525,7 +881,7 @@ class JSONCollapser {
     const btn = document.createElement('button');
     btn.className = 'json-collapser-copy';
     btn.setAttribute('data-json-collapser', 'copy-all');
-    btn.textContent = '📋 Copy All';
+    btn.innerHTML = ICON_COPY + ' Copy All';
     btn.title = 'Copy entire document as JSON';
     btn.style.display = 'none';
 
@@ -540,7 +896,7 @@ class JSONCollapser {
     keyElement.parentElement.appendChild(btn);
 
     keyElement.parentElement.addEventListener('mouseenter', () => {
-      btn.style.display = 'inline-block';
+      btn.style.display = 'inline-flex';
     });
 
     keyElement.parentElement.addEventListener('mouseleave', () => {
