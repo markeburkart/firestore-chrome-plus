@@ -1,70 +1,99 @@
 # Firebase JSON Collapser
 
-A Chrome extension that adds quick-copy functionality to large JSON blocks in the Firebase console, making it easier to work with complex document structures.
+A Chrome extension that tames large JSON fields in the Firebase console. It
+truncates long values inline, adds hover **popovers** and a full-screen
+**popup** for reading them, and gives every field (and the whole document) a
+one-click **copy** button.
 
 ## Features
 
-- 📋 **Quick Copy** — Copy large JSON fields to clipboard with one click
-- 🎯 Auto-detects large JSON blocks in Firebase console (>150 characters)
-- 🔒 Hides verbose JSON by default, keeping the console clean
-- ⚡ Instant feedback — button shows "✓ Copied!" when successful
-- 🎨 Minimal, clean UI that matches Firebase's design language
+- **Collapsed values** — long field values are truncated inline so the document
+  tree stays scannable
+- **Hover popover** — hovering a truncated value opens an interactive card with
+  the full value, pretty-printed if it's JSON, in a scrollable pane; it stays
+  open while your pointer is inside it
+- **Expand to a popup** — the `⤢` button (on the field, or in the popover)
+  opens a centered modal with the full, formatted value — scroll, select, copy;
+  closes on `Esc`, backdrop click, or the close button
+- **Copy** — every field gets a `Copy` button; string values are copied raw
+  (no surrounding quotes), objects/arrays as pretty-printed JSON
+- **Copy All** — the first field exposes a `Copy All` button that serializes the
+  entire document to JSON
+- Minimal UI with crisp SVG icons that matches Firebase's dark styling
 
 ## Installation
 
-1. **Open Chrome Extensions**
-   - Go to `chrome://extensions/`
-   - Enable "Developer mode" (toggle in top-right)
-
-2. **Load the Extension**
-   - Click "Load unpacked"
-   - Select this folder (`firebase-json-collapser`)
-
-3. **Start Using**
-   - Go to https://console.firebase.google.com
-   - Open any Firestore document with large JSON fields
-   - Click **"📋 Copy"** to copy the JSON to your clipboard
-   - Use **Cmd+V** to paste it anywhere
+1. Go to `chrome://extensions/` and enable **Developer mode** (top-right)
+2. Click **Load unpacked** and select this folder (`firebase-json-collapser`)
+3. Open https://console.firebase.google.com, view any Firestore document, and
+   hover / click the new controls
 
 ## Usage
 
-- Large JSON text blocks are hidden by default
-- Click **"📋 Copy"** to copy the field to your clipboard
-- Paste with **Cmd+V** (or **Ctrl+V** on Windows/Linux)
-- To view the full content, click on the field in Firebase's UI
+- **Read a value** — hover the truncated text to open the popover; click
+  `⤢ Expand` for the full-screen popup
+- **Copy one field** — hover the field row, click `Copy`
+- **Copy the whole document** — click `Copy All` on the first field
+- Paste with **Cmd+V** (**Ctrl+V** on Windows/Linux)
 
 ## Customization
 
-Edit `src/content.js` to adjust behavior:
+`src/content.js`:
 
 ```javascript
-const MIN_TEXT_LENGTH = 150; // Minimum characters to show copy button
+const MIN_TEXT_LENGTH = 150;   // reserved threshold constant
+const ICON_COPY = '<svg …>';   // inline copy icon
+const ICON_EXPAND = '<svg …>'; // inline expand icon
 ```
+
+Value truncation width and popover / modal styling live in
+`JSONCollapser.injectStyles()` in the same file; `src/styles.css` holds the base
+button style.
 
 ## Development
 
 To test changes:
 
 1. Edit files in `src/`
-2. Go to `chrome://extensions/`
-3. Click the **refresh icon** on the extension card
-4. Reload the Firebase console tab (Cmd+R)
+2. Go to `chrome://extensions/` and click the **reload** icon on the extension card
+3. Reload the Firebase console tab (**Cmd+R**) — content scripts do not
+   re-inject into already-open tabs on their own
+
+`example_dom.html` is a saved copy of a Firestore document's DOM. Serve the repo
+locally (`python3 -m http.server`) and open it to exercise the console code path
+without a live Firebase project. `example_output.json` / `correct_output.json`
+are the matching `Copy All` output and its hand-checked expected result.
+
+## Firestore emulator
+
+`src/content.js` also contains a parser for the Firestore emulator's
+`FieldPreview` DOM (`localhost:4000/firestore`). The bundled `manifest.json`
+only injects on `console.firebase.google.com`, so to use it against the emulator
+you currently have to add a matching entry to `content_scripts.matches` (and
+`host_permissions`) yourself.
 
 ## Architecture
 
 ```
 firebase-json-collapser/
-├── manifest.json        # Extension configuration
+├── manifest.json        # Extension configuration (MV3, content script)
 ├── src/
-│   ├── content.js       # Main extension logic
-│   └── styles.css       # Button styling
-├── icons/               # Extension icons
+│   ├── content.js       # All logic: detection, collapsing, popover, modal, copy
+│   └── styles.css       # Base button styling
+├── icons/               # Extension icons (16 / 48 / 128)
+├── example_dom.html     # Saved Firestore DOM for offline testing
+├── example_output.json  # "Copy All" output for that document
+├── correct_output.json  # Hand-checked expected output
 └── README.md
 ```
 
+`content.js` runs `JSONCollapser`, which detects the environment
+(`firebase-console` vs `emulator`), injects styles, processes fields on a
+`setTimeout` plus a `MutationObserver`, and manages a single shared popover and
+modal.
+
 ## Notes
 
-- ✅ Only runs on `console.firebase.google.com`
-- ✅ No data collection or transmission
-- ✅ Your Firebase data stays private and secure
-- ✅ Works on any Firestore document with large fields
+- Runs on `console.firebase.google.com` (emulator support is opt-in — see above)
+- No data collection or transmission; your Firebase data stays local
+- Works on any Firestore document with large fields
