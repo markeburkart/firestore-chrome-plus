@@ -1,9 +1,25 @@
-# Firebase JSON Collapser
+# Firestore Chrome Plus
 
 A Chrome extension that tames large JSON fields in the Firebase console. It
 truncates long values inline, adds hover **popovers** and a full-screen
 **popup** for reading them, and gives every field (and the whole document) a
 one-click **copy** button.
+
+## Why
+
+The Firestore console is built for browsing schema, not for pulling data out of
+it. Deeply nested documents wrap and push everything off screen, values can only
+be read by expanding them in place, and there is no way to copy a field — let
+alone a whole document — as usable JSON.
+
+This extension takes an opinionated stance on that workflow: **the tree should
+stay compact, reading a value should never disturb the layout, and any value
+should be one click from your clipboard as clean JSON.** So values are truncated
+to a fixed width by default, the full content lives in a hover popover (or an
+expandable modal for the big ones), and copy buttons emit raw strings without
+quotes and objects as pretty-printed JSON — the shapes you actually want to
+paste into code or a scratch file. It is a small set of choices, applied
+consistently, rather than a configurable toolbox.
 
 ## Features
 
@@ -24,7 +40,7 @@ one-click **copy** button.
 ## Installation
 
 1. Go to `chrome://extensions/` and enable **Developer mode** (top-right)
-2. Click **Load unpacked** and select this folder (`firebase-json-collapser`)
+2. Click **Load unpacked** and select this folder (`firestore-chrome-plus`)
 3. Open https://console.firebase.google.com, view any Firestore document, and
    hover / click the new controls
 
@@ -75,7 +91,7 @@ you currently have to add a matching entry to `content_scripts.matches` (and
 ## Architecture
 
 ```
-firebase-json-collapser/
+firestore-chrome-plus/
 ├── manifest.json        # Extension configuration (MV3, content script)
 ├── src/
 │   ├── content.js       # All logic: detection, collapsing, popover, modal, copy
