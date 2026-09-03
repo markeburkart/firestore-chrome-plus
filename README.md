@@ -75,10 +75,8 @@ To test changes:
 3. Reload the Firebase console tab (**Cmd+R**) — content scripts do not
    re-inject into already-open tabs on their own
 
-`example_dom.html` is a saved copy of a Firestore document's DOM. Serve the repo
-locally (`python3 -m http.server`) and open it to exercise the console code path
-without a live Firebase project. `example_output.json` / `correct_output.json`
-are the matching `Copy All` output and its hand-checked expected result.
+There is no automated test suite; verify against a real Firestore document, or a
+locally saved copy of its DOM served with `python3 -m http.server`.
 
 ## Firestore emulator
 
@@ -96,10 +94,7 @@ firestore-chrome-plus/
 ├── src/
 │   ├── content.js       # All logic: detection, collapsing, popover, modal, copy
 │   └── styles.css       # Base button styling
-├── icons/               # Extension icons (16 / 48 / 128)
-├── example_dom.html     # Saved Firestore DOM for offline testing
-├── example_output.json  # "Copy All" output for that document
-├── correct_output.json  # Hand-checked expected output
+├── icons/               # Extension icons (16 / 48 / 128) + generator script
 └── README.md
 ```
 
@@ -113,3 +108,8 @@ modal.
 - Runs on `console.firebase.google.com` (emulator support is opt-in — see above)
 - No data collection or transmission; your Firebase data stays local
 - Works on any Firestore document with large fields
+
+## Credits
+
+The inline `Copy` and `Expand` glyphs are the `copy` and `maximize-2` icons from
+[Feather](https://feathericons.com) (MIT).

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Block commits that carry a non-empty author/committer email.
+# This repo intentionally records commits with an empty identity ("Name <>").
+# If this fires, run:  git config --local user.email ""
+
+ident=$(git var GIT_AUTHOR_IDENT 2>/dev/null)$(git var GIT_COMMITTER_IDENT 2>/dev/null)
+email=$(printf '%s\n' "$ident" | sed -n 's/.*<\([^>]*\)>.*/\1/p' | tr -d '[:space:]')
+
+if [ -n "$email" ]; then
+  echo "pre-commit: refusing commit — author/committer email is set (\"$email\")." >&2
+  echo "            run: git config --local user.email \"\"" >&2
+  exit 1
+fi
