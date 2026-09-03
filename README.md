@@ -122,3 +122,7 @@ modal.
 
 The inline `Copy` and `Expand` glyphs are the `copy` and `maximize-2` icons from
 [Feather](https://feathericons.com) (MIT).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

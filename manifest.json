@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Firebase JSON Collapser",
+  "name": "Firestore Chrome Plus",
   "version": "1.0.0",
-  "description": "Collapse large JSON blocks in Firebase console for easier navigation",
+  "description": "Collapse, read, and copy large JSON fields in the Firestore console.",
   "permissions": [
     "activeTab",
     "scripting"

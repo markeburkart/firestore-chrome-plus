@@ -1,4 +1,4 @@
-// Firebase JSON Collapser - Content Script
+// Firestore Chrome Plus - Content Script
 // Targets large JSON text blocks in the document details panel
 // Supports both Firebase Console and Firestore Emulator
 
