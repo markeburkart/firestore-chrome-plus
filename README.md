@@ -68,6 +68,15 @@ button style.
 
 ## Development
 
+After cloning, wire up the local commit settings (not carried by `git clone`):
+
+```sh
+git config user.email "" && git config core.hooksPath .githooks
+```
+
+Commits in this repo are recorded with an empty identity; the `pre-commit` hook
+rejects any commit that carries an author email.
+
 To test changes:
 
 1. Edit files in `src/`
